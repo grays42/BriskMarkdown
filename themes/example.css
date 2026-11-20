@@ -1,0 +1,20 @@
+/* An example BriskMarkdown theme.
+   Copy this file, rename it, and pick it from View > Theme. Changes show when you choose
+   View > Theme > Reload Current Theme. Every selector and property is listed in docs/themes.md
+   (https://github.com/grays42/BriskMarkdown/blob/main/docs/themes.md).
+
+   Start from a built-in theme and change only what you want: */
+@import "dark";
+
+:root {
+  --accent: #e0a458;            /* caret, task boxes, accents */
+  --link: #7fc8f8;
+  --paper: #101317;             /* page background */
+  font-size: 16px;
+  max-width: 760px;             /* reading column width */
+}
+
+h1 { color: #e0a458; }
+h2 { color: #f2c48d; }
+blockquote { border-left: 3px solid #e0a458; }
+code { background: #1d232b; }

@@ -1,0 +1,40 @@
+/* Sepia: warm paper and a serif face, for long reading. */
+
+:root {
+  --paper: #f4ecd8;
+  --surface: #ece2c8;
+  --surface-2: #e4d8ba;
+  --rule: #d3c4a0;
+  --ink: #3b3226;
+  --ink-2: #54483a;
+  --muted: #7a6b56;
+  --quiet: #988871;
+  --accent: #9b4f2e;
+  --link: #7a4a1c;
+  --code-bg: #e9dfc4;
+  --code-border: #d8c9a6;
+  --selection: rgba(155, 79, 46, 0.22);
+  --sans: Georgia, Cambria, serif;
+  --heading: Georgia, Cambria, serif;
+
+  --tok-keyword: #9b4f2e;
+  --tok-string: #4f6b2f;
+  --tok-comment: #988871;
+  --tok-number: #8a5a12;
+  --tok-type: #2f5f7a;
+  --tok-function: #6d3f8a;
+  --tok-constant: #8a5a12;
+  --tok-property: #2f5f7a;
+  --tok-tag: #9b4f2e;
+
+  font-size: 16.5px;
+  line-height: 1.75;
+  max-width: 760px;
+}
+
+blockquote { border-left: 3px solid #c9b48a; font-style: italic; }
+.mono { background: #f4ecd8; }
+.menubar { background: #ece2c8; color: #3b3226; }
+.status { background: #ece2c8; color: #7a6b56; border-top: 1px solid #d3c4a0; }
+.status-button { background: #f4ecd8; color: #3b3226; border: 1px solid #d3c4a0; }
+.scrollbar { background: #cbb994; }

@@ -1,0 +1,75 @@
+/* Dark: the default. A calm dark reading page: warm off-white ink on near-black paper,
+   lavender accents, soft blue links, quiet borders. */
+
+:root {
+  --paper: #14161a;
+  --surface: #1b1e23;
+  --surface-2: #23272e;
+  --rule: #343a43;
+  --ink: #e8e6e1;
+  --ink-2: #b9c2d0;
+  --muted: #a6acb5;
+  --quiet: #89939f;
+  --accent: #b5a0de;
+  --link: #98bee8;
+  --code-bg: #252b33;
+  --code-border: #303944;
+  --selection: rgba(181, 160, 222, 0.30);
+  --find: rgba(217, 171, 82, 0.28);
+  --find-current: rgba(217, 171, 82, 0.62);
+  --ok: #5cc0c8;
+  --warn: #d9ab52;
+  --error: #e28a7e;
+  --info: #7fb2e5;
+  --sans: Inter, "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", "IBM Plex Mono", Consolas, monospace;
+
+  --tok-keyword: #b5a0de;
+  --tok-string: #8ad1c9;
+  --tok-comment: #7d8793;
+  --tok-number: #d9ab52;
+  --tok-type: #7fb2e5;
+  --tok-function: #98bee8;
+  --tok-constant: #e28a7e;
+  --tok-property: #c9d1dc;
+  --tok-tag: #e28a7e;
+  --tok-meta: #d9ab52;
+  --tok-inserted: #5cc0c8;
+  --tok-deleted: #e28a7e;
+  --tok-variable: #e8c48a;
+
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+h1 { font-size: 24px; font-weight: 600; margin: 28px 0 12px; }
+h2 { font-size: 20px; font-weight: 600; margin: 26px 0 12px; }
+h3 { font-size: 16px; font-weight: 650; margin: 24px 0 10px; }
+h4 { font-size: 15px; font-weight: 650; }
+h5 { font-size: 14px; font-weight: 650; }
+h6 { font-size: 13px; font-weight: 650; color: var(--quiet); }
+
+p { margin: 0 0 16px; }
+
+blockquote {
+  color: var(--ink-2);
+  border-left: 2px solid var(--accent);
+  padding: 4px 0 4px 18px;
+  margin: 16px 0;
+}
+
+li { padding-left: 24px; margin: 5px 0; }
+
+table { font-size: 13px; margin: 20px 0; }
+th, td { padding: 9px 13px; border: 1px solid #3b444f; }
+th { background: var(--surface); color: var(--ink); }
+
+pre { background: #181b20; border: 1px solid #2b3139; }
+
+hr { border-top: 1px solid var(--rule); margin: 24px 0; }
+
+.mono { background: #14171b; color: var(--ink); }
+.menubar { background: #181b20; color: #c9cdd3; }
+.status { background: #181b20; color: var(--quiet); border-top: 1px solid #262b32; }
+.status-button { background: #262b33; color: var(--ink); border: 1px solid #3b444f; }
+.scrollbar { background: #3a414b; }

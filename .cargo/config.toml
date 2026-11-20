@@ -1,0 +1,7 @@
+# Link the C runtime statically so BriskMarkdown.exe runs on any Windows 10/11 machine with
+# nothing else installed.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

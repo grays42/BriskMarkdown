@@ -1,0 +1,26 @@
+/* Light: clean and neutral, for daylight and for sharing a screen. */
+
+:root {
+  --paper: #ffffff;
+  --surface: #f6f8fa;
+  --surface-2: #eef1f4;
+  --rule: #d1d9e0;
+  --ink: #1f2328;
+  --ink-2: #3d444d;
+  --muted: #59636e;
+  --quiet: #818b98;
+  --accent: #8250df;
+  --link: #0969da;
+  --code-bg: #eff1f3;
+  --code-border: #e1e4e8;
+  --selection: rgba(9, 105, 218, 0.20);
+  --sans: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+}
+
+blockquote { border-left: 3px solid #d1d9e0; color: #59636e; }
+h1, h2 { border-bottom: 1px solid #d1d9e0; padding-bottom: 6px; }
+.mono { background: #ffffff; }
+.menubar { background: #f6f8fa; color: #1f2328; }
+.status { background: #f6f8fa; color: #59636e; border-top: 1px solid #d1d9e0; }
+.status-button { background: #ffffff; color: #1f2328; border: 1px solid #d1d9e0; }
+.scrollbar { background: #c4ccd5; }

@@ -1,0 +1,41 @@
+schema_version = 1
+
+[index]
+default = "tracked"
+include = []
+exclude = ["target/**", "docs/images/**", "assets/*.ico", "assets/*.png"]
+
+[[routes]]
+name = "markdown-parsing"
+match = ["render", "parse", "markdown", "table", "list", "math", "html block", "mapping"]
+read = ["SIGNPOST.md", "docs/design.md", "src/markdown.rs"]
+reason = "The display-to-source map is the core invariant; parsing changes must keep --check clean."
+
+[[routes]]
+name = "look-and-themes"
+match = ["theme", "style", "css", "colour", "color", "font", "dark", "light"]
+read = ["docs/themes.md", "themes/base.css", "src/theme.rs"]
+reason = "Themes are a CSS subset resolved in theme.rs; built-ins live in themes/."
+
+[[routes]]
+name = "editing-and-window"
+match = ["caret", "cursor", "keyboard", "shortcut", "menu", "mode", "save", "undo", "print"]
+read = ["SIGNPOST.md", "src/app.rs", "src/editor.rs"]
+reason = "Input, commands and file handling; verify with tools/ui_test.py."
+
+[[authorities]]
+path = "SIGNPOST.md"
+standing = "durable"
+scope = ["purpose", "safety", "routing"]
+summary = "Purpose, safety invariants, ownership boundaries and task routing."
+
+[[authorities]]
+path = "docs/design.md"
+standing = "durable"
+scope = ["goals", "architecture", "verification"]
+summary = "Goals and promises in priority order, architecture, and how it is verified."
+
+[[sensitivity]]
+pattern = ".env*"
+level = "never-read"
+reason = "Local configuration is outside automatic context discovery."

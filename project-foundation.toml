@@ -1,0 +1,31 @@
+schema_version = 1
+foundation_revision = "9ac66c0"
+profile = "product"
+overlays = []
+
+canonical_root = "T:/Projects/BriskMarkdown"   # the maintainer's workspace checkout
+runtime_hosts = []                 # a desktop app: it runs wherever it is installed
+durable_data_root = ""             # none: the app keeps only per-user settings
+
+[version_control]
+remote = "github"
+visibility = "public"
+explicit_user_selection = true
+public_authorized = true          # the owner, 2026-11-19: open source and published at once
+
+[capabilities]
+llmgateway = false
+postgresql = false
+secretsmanager = false
+computepool = false
+github_remote = true
+ci = false
+deployed_service = false
+instruments = false
+
+[hydration]
+agents = "AGENTS.md"
+signpost = "SIGNPOST.md"
+readme = "README.md"
+initial_understanding = ""
+context_manifest = ".metacodex/context.toml"
