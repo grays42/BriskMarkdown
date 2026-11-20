@@ -10,8 +10,8 @@ happens in the plain-text view, one keystroke away.
 ### Goals, in priority order
 
 1. **Opens instantly.** One small native executable, no runtime to install, no browser engine.
-   Target: the styled document is on screen within 100 ms of launch. In practice it takes about
-   40 ms on a 287 KB file.
+   Target: the styled document is on screen within 100 ms of launch. Measured: about 50 ms on an
+   idle machine and 75 ms on a busy desktop, for files from 2 KB to 290 KB.
 2. **Reads beautifully.** A calm, considered page by default, with alternative themes and a CSS
    theme format for making your own.
 3. **Two modes, one keystroke apart.** *Markdown mode* (the default) shows the document styled,
@@ -79,6 +79,10 @@ The caret is a source offset, so it maps exactly into the other mode.
 - **Software Direct2D rendering.** Creating a hardware device costs about 25 ms at startup. For
   text, software rendering is faster to start and plenty fast to draw. Set `BRISK_GPU=1` to
   compare.
+- **Draw first, activate second.** The window is shown without activating it, the first frame
+  is drawn, and only then does it take focus: activation (focus, input method, other programs'
+  hooks) can cost tens of milliseconds on a busy desktop.
+- **Delay-loaded DLLs.** Shell, dialog, COM, input-method and registry DLLs load on first use.
 - **Lazy layout.** Only the blocks on screen are laid out before the first frame; the rest are
   laid out in idle time, while the view stays anchored.
 - **Layout reuse.** After an edit, every block whose display text and style are unchanged keeps

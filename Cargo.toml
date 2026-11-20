@@ -1,6 +1,6 @@
 [package]
 name = "brisk-markdown"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A fast, lightweight Markdown notepad for Windows: opens instantly, renders cleanly, edits directly."
 license = "MIT"

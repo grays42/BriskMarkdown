@@ -12,12 +12,12 @@ One small .exe. Styled reading by default, the plain source one keystroke away.<
 Most Markdown readers are web browsers in disguise: they take seconds to open, use hundreds of
 megabytes, and bring a workspace, a sidebar and last week's files along with them.
 BriskMarkdown is a notepad for `.md` files: double-click a file and it's on screen, styled, in
-about 40 milliseconds. Close it and it's gone.
+well under a tenth of a second. Close it and it's gone.
 
 ## Features
 
 - **Instant.** A native Win32/Direct2D program with no runtime and no browser engine. The
-  styled document is on screen within about 40 ms of launch, even for large files.
+  styled document is on screen 50 to 80 ms after launch, even for files of a few hundred KB.
 - **Two modes, one keystroke apart.** *Markdown mode* shows the document styled and lets you
   type into it. *Mono mode* shows the exact source in a monospace font.
   <kbd>Ctrl</kbd>+<kbd>/</kbd> switches, and the caret stays at the same height on screen.
