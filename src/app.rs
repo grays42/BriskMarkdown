@@ -2009,6 +2009,7 @@ impl App {
         let caret = if self.caret_on && self.drag == Drag::None || self.caret_on { self.caret_rect() } else { None };
         let caret = if self.doc.has_sel() && self.view.mode == Mode::Markdown { None } else { caret };
         let rt: ID2D1RenderTarget = self.gfx.rt.clone().unwrap();
+        let t0 = std::time::Instant::now();
         unsafe {
             rt.BeginDraw();
             self.paint_into(&rt, caret);
@@ -2016,6 +2017,16 @@ impl App {
                 self.hrt = None;
                 self.gfx.set_target(None);
             }
+        }
+        if std::env::var_os("BRISK_TRACE").is_some() {
+            let (w, h) = self.client_dips();
+            trace(&format!(
+                "paint ms={:.2} size={}x{} scale={}",
+                t0.elapsed().as_secs_f64() * 1000.0,
+                (w * self.scale) as i32,
+                (h * self.scale) as i32,
+                self.scale
+            ));
         }
         if !self.painted {
             self.painted = true;

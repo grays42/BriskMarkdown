@@ -262,7 +262,68 @@ cmd(hwnd, "save")
 check("external change reloads", p.read_text("utf-8") == "Changed outside!\n", repr(p.read_text("utf-8")))
 close(proc, hwnd)
 
-# 8. Opening and closing without edits never touches the file.
+# 8. Find (common dialog) selects the match; typing replaces it. Go To moves to a line.
+user32.GetDlgItem.restype = wt.HWND
+user32.GetDlgItem.argtypes = [wt.HWND, ctypes.c_int]
+user32.GetWindow.restype = wt.HWND
+user32.GetWindow.argtypes = [wt.HWND, wt.UINT]
+user32.FindWindowExW.restype = wt.HWND
+user32.FindWindowExW.argtypes = [wt.HWND, wt.HWND, ctypes.c_wchar_p, ctypes.c_wchar_p]
+_u32 = ctypes.WinDLL("user32")  # a second handle, so this prototype doesn't change SendMessageW's
+_u32.SendMessageW.argtypes = [wt.HWND, wt.UINT, wt.WPARAM, ctypes.c_wchar_p]
+_u32.SendMessageW.restype = ctypes.c_ssize_t
+send_text = _u32.SendMessageW
+
+
+def owned_window(owner, class_name, timeout=3.0):
+    found = []
+
+    @ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+    def cb(hwnd, _):
+        buf = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(hwnd, buf, 64)
+        if buf.value == class_name and user32.GetWindow(hwnd, 4) == owner and user32.IsWindowVisible(hwnd):
+            found.append(hwnd)
+        return True
+
+    end = time.time() + timeout
+    while time.time() < end:
+        found.clear()
+        user32.EnumWindows(cb, 0)
+        if found:
+            return found[0]
+        time.sleep(0.05)
+    return None
+
+
+proc, hwnd, p = launch("alpha beta gamma\n\nsecond line has beta too\n", "find.md")
+user32.PostMessageW(hwnd, WM_COMMAND, 208, 0)  # Find...
+dlg = owned_window(hwnd, "#32770")
+check("find dialog opens", dlg is not None)
+if dlg:
+    edit = user32.GetDlgItem(dlg, 1152)
+    send_text(edit, 0x000C, 0, "gamma")  # WM_SETTEXT
+    send_text(user32.GetDlgItem(dlg, 1), 0x00F5, 0, None)  # BM_CLICK "Find Next"
+    time.sleep(0.3)
+    user32.PostMessageW(dlg, WM_CLOSE, 0, 0)
+    settle(hwnd, 0.3)
+    typ(hwnd, "GAMMA")
+    cmd(hwnd, "save")
+    check("find selects the match", p.read_text("utf-8").startswith("alpha beta GAMMA\n"), repr(p.read_text("utf-8")))
+user32.PostMessageW(hwnd, WM_COMMAND, 212, 0)  # Go To Line...
+box = owned_window(hwnd, "BriskPrompt")
+check("go-to box opens", box is not None)
+if box:
+    edit = user32.FindWindowExW(box, None, "EDIT", None)
+    send_text(edit, 0x000C, 0, "3")
+    user32.PostMessageW(box, WM_COMMAND, 1, 0)
+    settle(hwnd, 0.3)
+    typ(hwnd, ">")
+    cmd(hwnd, "save")
+    check("go to line 3", p.read_text("utf-8").endswith("\n>second line has beta too\n"), repr(p.read_text("utf-8")))
+close(proc, hwnd)
+
+# 9. Opening and closing without edits never touches the file.
 src = Path(__file__).resolve().parent.parent / "docs" / "samples" / "showcase.md"
 dst = SCRATCH / "showcase.md"
 shutil.copy(src, dst)
