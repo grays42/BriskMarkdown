@@ -52,6 +52,7 @@ View
 pub const THEME_EXAMPLE: &str = include_str!("../themes/example.css");
 
 fn main() {
+    app::mark("main");
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut file: Option<PathBuf> = None;
     let mut bench: Option<PathBuf> = None;

@@ -169,6 +169,24 @@ fn user_theme_names() -> Vec<String> {
     v
 }
 
+/// COM is needed only for file dialogs, printing and off-screen images: start it on first use.
+pub fn ensure_com() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    });
+}
+
+static mut PHASES: Vec<(&'static str, f64)> = Vec::new();
+
+/// Record a startup phase (only reported by --bench).
+pub fn mark(label: &'static str) {
+    unsafe {
+        #[allow(static_mut_refs)]
+        PHASES.push((label, ms_since_start()));
+    }
+}
+
 fn ms_since_start() -> f64 {
     use windows::Win32::System::SystemInformation::GetSystemTimePreciseAsFileTime;
     use windows::Win32::System::Threading::*;
@@ -1464,7 +1482,10 @@ impl App {
                     reveal_in_explorer(p);
                 }
             }
-            CMD_PRINT => crate::print::print(self.hwnd, &self.doc.text, self.doc.path.as_deref()),
+            CMD_PRINT => {
+                ensure_com();
+                crate::print::print(self.hwnd, &self.doc.text, self.doc.path.as_deref());
+            }
             CMD_EXIT => unsafe {
                 let _ = PostMessageW(Some(self.hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
             },
@@ -1965,6 +1986,9 @@ impl App {
         if self.hrt.is_some() {
             return true;
         }
+        if !self.painted {
+            mark("paint-start");
+        }
         unsafe {
             let mut rc = RECT::default();
             let _ = GetClientRect(self.hwnd, &mut rc);
@@ -2005,7 +2029,13 @@ impl App {
         if !self.ensure_target() {
             return;
         }
+        if !self.painted {
+            mark("target");
+        }
         self.view.prepare(&self.gfx, &self.theme);
+        if !self.painted {
+            mark("layout");
+        }
         let caret = if self.caret_on && self.drag == Drag::None || self.caret_on { self.caret_rect() } else { None };
         let caret = if self.doc.has_sel() && self.view.mode == Mode::Markdown { None } else { caret };
         let rt: ID2D1RenderTarget = self.gfx.rt.clone().unwrap();
@@ -2033,13 +2063,26 @@ impl App {
             if let Some(log) = &self.bench {
                 use std::io::Write;
                 if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log) {
+                    let phases: String = unsafe {
+                        #[allow(static_mut_refs)]
+                        PHASES.iter().map(|(l, t)| format!(" {l}={t:.1}")).collect()
+                    };
+                    let msgs: String = unsafe {
+                        #[allow(static_mut_refs)]
+                        MSG_TIMES.iter().map(|(m, t, d)| format!(" 0x{m:04x}@{t:.0}:{d:.1}")).collect()
+                    };
+                    let (w, h) = self.client_dips();
                     let _ = writeln!(
                         f,
-                        "first_frame_ms={:.1} file={} bytes={} blocks={}",
+                        "first_frame_ms={:.1} size={}x{} scale={} bytes={} blocks={} |{} | msgs{}",
                         ms_since_start(),
-                        self.doc.path.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
+                        (w * self.scale) as i32,
+                        (h * self.scale) as i32,
+                        self.scale,
                         self.doc.text.len(),
-                        self.view.blocks.len()
+                        self.view.blocks.len(),
+                        phases,
+                        msgs
                     );
                 }
                 unsafe { PostQuitMessage(0) };
@@ -2063,6 +2106,7 @@ impl App {
     /// Test hook: render the window as it is now (document, caret, selection, scrollbar, status
     /// bar) into a PNG. Used where the desktop can't be captured.
     fn snapshot(&mut self, path: &Path) {
+        ensure_com();
         let Ok(f) = crate::export::wic() else { return };
         let (w, h) = self.client_dips();
         let Ok((bmp, rt)) = crate::export::wic_target(&self.gfx, &f, (w * self.scale) as u32, (h * self.scale) as u32, self.scale) else {
@@ -2375,6 +2419,7 @@ fn word_right_d(s: &str, d: u32) -> u32 {
 }
 
 fn file_dialog(owner: HWND, save: bool, current: Option<&Path>) -> Option<PathBuf> {
+    ensure_com();
     unsafe {
         let filters = [
             COMDLG_FILTERSPEC { pszName: w!("Markdown"), pszSpec: w!("*.md;*.markdown;*.mdown;*.mkd;*.mkdn;*.mdx") },
@@ -2413,7 +2458,26 @@ fn file_dialog(owner: HWND, save: bool, current: Option<&Path>) -> Option<PathBu
     }
 }
 
+static mut MSG_TIMES: Vec<(u32, f64, f64)> = Vec::new();
+static mut BENCHING: bool = false;
+
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    unsafe {
+        if BENCHING {
+            let t0 = ms_since_start();
+            let r = wndproc_inner(hwnd, msg, wp, lp);
+            let dt = ms_since_start() - t0;
+            if dt >= 0.3 {
+                #[allow(static_mut_refs)]
+                MSG_TIMES.push((msg, t0, dt));
+            }
+            return r;
+        }
+        wndproc_inner(hwnd, msg, wp, lp)
+    }
+}
+
+fn wndproc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     unsafe {
         let Some(a) = app() else { return DefWindowProcW(hwnd, msg, wp, lp) };
         if msg == a.find_msg && a.find_msg != 0 {
@@ -2669,7 +2733,8 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                 LRESULT(0)
             }
             WM_ACTIVATE => {
-                if (wp.0 & 0xffff) != 0 {
+                // The file was just read at startup; only re-check when coming back to the window.
+                if (wp.0 & 0xffff) != 0 && a.painted {
                     a.check_disk();
                 }
                 DefWindowProcW(hwnd, msg, wp, lp)
@@ -2730,9 +2795,9 @@ pub struct Opts {
 pub fn run(opts: Opts) -> Result<()> {
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
         let settings = Settings::load();
         let theme = load_theme(&settings.theme);
+        mark("settings+theme");
         let mut doc = match &opts.file {
             Some(p) => match Doc::load(p) {
                 Ok(d) => d,
@@ -2747,7 +2812,9 @@ pub fn run(opts: Opts) -> Result<()> {
         if doc.path.is_none() {
             doc.crlf = true;
         }
+        mark("file");
         let gfx = Gfx::new()?;
+        mark("factories");
         let hinst = GetModuleHandleW(None)?;
         let bg = theme.style(El::Body).background.unwrap_or(Color::rgb(20, 22, 26));
         let class = w!("BriskMarkdownWindow");
@@ -2766,12 +2833,14 @@ pub fn run(opts: Opts) -> Result<()> {
         };
         RegisterClassExW(&wc);
         let (menu, file_menu, view_menu) = build_menus();
+        mark("class+menus");
         let dpi = GetDpiForSystem() as f32;
         let (x, y, w, h, maximized) = match settings.placement {
             Some((x, y, w, h, m)) if w > 200 && h > 150 => (x, y, w, h, m),
             _ => (CW_USEDEFAULT, CW_USEDEFAULT, (1000.0 * dpi / 96.0) as i32, (820.0 * dpi / 96.0) as i32, false),
         };
         let title = wstr("BriskMarkdown");
+        BENCHING = opts.bench.is_some();
         let hwnd = CreateWindowExW(
             WS_EX_ACCEPTFILES,
             class,
@@ -2787,6 +2856,7 @@ pub fn run(opts: Opts) -> Result<()> {
             None,
         )?;
         let scale = GetDpiForWindow(hwnd) as f32 / 96.0;
+        mark("window");
         let mut view = View::new();
         view.zoom = settings.zoom;
         view.wrap = settings.wrap;
@@ -2838,8 +2908,20 @@ pub fn run(opts: Opts) -> Result<()> {
         a.update_title();
         a.layout_viewport();
         a.rebuild();
-        let _ = ShowWindow(hwnd, if maximized { SW_SHOWMAXIMIZED } else { SW_SHOW });
-        let _ = UpdateWindow(hwnd);
+        mark("parse");
+        if maximized {
+            let _ = ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+            mark("shown");
+            let _ = UpdateWindow(hwnd);
+        } else {
+            // Show and draw first, activate second: activation (focus, input method, other
+            // programs' hooks) can take tens of milliseconds and need not delay the first frame.
+            let _ = ShowWindow(hwnd, SW_SHOWNA);
+            mark("shown");
+            let _ = UpdateWindow(hwnd);
+            let _ = SetForegroundWindow(hwnd);
+            let _ = SetFocus(Some(hwnd));
+        }
         SetTimer(Some(hwnd), TIMER_FILE, 1000, None);
         a.restart_blink();
         let accel = a.accel;
