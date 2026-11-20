@@ -246,7 +246,6 @@ impl Para {
         }
         self.len()
     }
-
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -395,7 +394,6 @@ impl Block {
             &self.para
         }
     }
-
 }
 
 pub fn options() -> Options {
@@ -1371,7 +1369,6 @@ fn list_marker_width(t: &str) -> Option<usize> {
     }
     None
 }
-
 
 #[cfg(test)]
 mod tests {
