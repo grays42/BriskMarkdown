@@ -71,6 +71,18 @@ fn main() {
                 i += 1;
                 bench = args.get(i).map(PathBuf::from);
             }
+            "--print-test" => {
+                let (Some(input), Some(out)) = (args.get(i + 1), args.get(i + 2)) else { std::process::exit(2) };
+                let text = std::fs::read(input).map(|b| editor::decode(&b).0.replace("\r\n", "\n")).unwrap_or_default();
+                let code = match print::print_test(&text, std::path::Path::new(out)) {
+                    Ok(()) => 0,
+                    Err(e) => {
+                        let _ = std::fs::write(format!("{out}.error.txt"), format!("{e:?}"));
+                        4
+                    }
+                };
+                std::process::exit(code);
+            }
             "--png" | "--check" => {
                 let code = export::cli(&args);
                 std::process::exit(code);

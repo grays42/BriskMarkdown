@@ -8,10 +8,8 @@ use crate::view::{Mode, View};
 use std::path::Path;
 use windows::core::*;
 use windows::Win32::Foundation::*;
-use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::Win32::Graphics::DirectWrite::*;
-use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::Storage::Xps::*;
 
@@ -34,7 +32,7 @@ pub fn print(hwnd: HWND, text: &str, path: Option<&Path>) {
         }
         let hdc = pd.hDC;
         let name = path.and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "Untitled".into());
-        if let Err(e) = print_to_dc(hdc, text, &name) {
+        if let Err(e) = print_to_dc(hdc, text, &name, None) {
             let msg = wstr(&format!("Printing failed: {}", e.message()));
             MessageBoxW(Some(hwnd), PCWSTR(msg.as_ptr()), w!("BriskMarkdown"), MB_OK | MB_ICONWARNING);
         }
@@ -52,7 +50,21 @@ unsafe fn free(pd: &PRINTDLGEXW) {
     }
 }
 
-unsafe fn print_to_dc(hdc: HDC, text: &str, name: &str) -> Result<()> {
+/// Test hook: print through "Microsoft Print to PDF" into `out` without any dialog.
+pub fn print_test(text: &str, out: &Path) -> Result<()> {
+    unsafe {
+        let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_APARTMENTTHREADED);
+        let hdc = CreateDCW(w!("WINSPOOL"), w!("Microsoft Print to PDF"), PCWSTR::null(), None);
+        if hdc.is_invalid() {
+            return Err(Error::new(Error::from_thread().code(), "CreateDC failed"));
+        }
+        let r = print_to_dc(hdc, text, "print-test.md", Some(out));
+        let _ = DeleteDC(hdc);
+        r
+    }
+}
+
+unsafe fn print_to_dc(hdc: HDC, text: &str, name: &str, output: Option<&Path>) -> Result<()> {
     let dpi_x = GetDeviceCaps(Some(hdc), LOGPIXELSX) as f32;
     let dpi_y = GetDeviceCaps(Some(hdc), LOGPIXELSY) as f32;
     let horz = GetDeviceCaps(Some(hdc), HORZRES) as f32;
@@ -72,17 +84,15 @@ unsafe fn print_to_dc(hdc: HDC, text: &str, name: &str) -> Result<()> {
 
     // Print on white: use a light theme whatever the screen theme is.
     let theme = Theme::builtin("Light");
+    // One off-screen band bitmap for the whole job: drawn with Direct2D, then copied to the
+    // printer with StretchDIBits (Direct2D's DC target refuses printer DCs).
+    let band_px = (2.0 * dpi_y) as i32;
+    let band_w = area_w_px.ceil() as u32;
     let mut gfx = Gfx::new()?;
-    let props = D2D1_RENDER_TARGET_PROPERTIES {
-        r#type: D2D1_RENDER_TARGET_TYPE_SOFTWARE,
-        pixelFormat: D2D1_PIXEL_FORMAT { format: DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_IGNORE },
-        dpiX: dpi_x,
-        dpiY: dpi_y,
-        ..Default::default()
-    };
-    let rt = gfx.d2d.CreateDCRenderTarget(&props)?;
+    let wic = crate::export::wic()?;
+    let (bmp, rt) = crate::export::wic_target(&gfx, &wic, band_w, band_px as u32, dpi_x / 96.0)?;
     rt.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
-    gfx.set_target(Some(rt.cast()?));
+    gfx.set_target(Some(rt.clone()));
 
     let mut view = View::new();
     view.mode = Mode::Markdown;
@@ -113,9 +123,15 @@ unsafe fn print_to_dc(hdc: HDC, text: &str, name: &str) -> Result<()> {
     }
 
     let doc_name = wstr(name);
-    let di = DOCINFOW { cbSize: std::mem::size_of::<DOCINFOW>() as i32, lpszDocName: PCWSTR(doc_name.as_ptr()), ..Default::default() };
+    let out_w = output.map(|o| wstr(&o.to_string_lossy()));
+    let di = DOCINFOW {
+        cbSize: std::mem::size_of::<DOCINFOW>() as i32,
+        lpszDocName: PCWSTR(doc_name.as_ptr()),
+        lpszOutput: out_w.as_ref().map(|w| PCWSTR(w.as_ptr())).unwrap_or(PCWSTR::null()),
+        ..Default::default()
+    };
     if StartDocW(hdc, &di) <= 0 {
-        return Err(Error::from_thread());
+        return Err(Error::new(Error::from_thread().code(), "StartDoc failed"));
     }
     let footer_style = theme.style(El::Status).clone();
     let ffam = gfx.pick_family(&footer_style.families);
@@ -125,14 +141,10 @@ unsafe fn print_to_dc(hdc: HDC, text: &str, name: &str) -> Result<()> {
             break;
         }
         // Draw the page in horizontal bands to keep memory modest at printer resolution.
-        let band_px = (2.0 * dpi_y) as i32;
         let page_px_h = ((bottom - top) * dpi_y / 96.0).ceil() as i32 + footer_px as i32 + 4;
         let mut band_top = 0;
         while band_top < page_px_h {
             let band_h = band_px.min(page_px_h - band_top);
-            let r =
-                RECT { left: ml as i32, top: mt as i32 + band_top, right: (ml + area_w_px) as i32, bottom: mt as i32 + band_top + band_h };
-            rt.BindDC(hdc, &r)?;
             rt.BeginDraw();
             rt.Clear(Some(&d2color(&crate::theme::Color::rgb(255, 255, 255))));
             let band_dip = band_top as f32 * 96.0 / dpi_y;
@@ -141,8 +153,7 @@ unsafe fn print_to_dc(hdc: HDC, text: &str, name: &str) -> Result<()> {
                 rt.PushAxisAlignedClip(&rect(0.0, 0.0, page_w, clip_h), D2D1_ANTIALIAS_MODE_ALIASED);
                 view.scroll = top + band_dip;
                 view.screen_h = (band_h as f32 * 96.0 / dpi_y).min(clip_h);
-                let rt2: ID2D1RenderTarget = rt.cast()?;
-                view.paint(&gfx, &theme, &rt2, 0.0, (0, 0), None, &[], None);
+                view.paint(&gfx, &theme, &rt, 0.0, (0, 0), None, &[], None);
                 rt.PopAxisAlignedClip();
             }
             // Footer
@@ -158,11 +169,43 @@ unsafe fn print_to_dc(hdc: HDC, text: &str, name: &str) -> Result<()> {
                     D2D1_DRAW_TEXT_OPTIONS_NONE,
                 );
             }
-            rt.EndDraw(None, None)?;
+            rt.EndDraw(None, None).map_err(|e| Error::new(e.code(), "EndDraw failed"))?;
+            if let Some(dir) = std::env::var_os("BRISK_PRINT_DEBUG") {
+                let _ = crate::export::save_png(&wic, &bmp, &std::path::PathBuf::from(dir).join(format!("band-{n}-{band_top}.png")));
+            }
+            blit(hdc, &bmp, ml as i32, mt as i32 + band_top, band_w, band_h as u32)?;
             band_top += band_h;
         }
         EndPage(hdc);
     }
     EndDoc(hdc);
+    Ok(())
+}
+
+/// Copy the top `h` rows of the band bitmap to the printer at (x, y).
+unsafe fn blit(hdc: HDC, bmp: &windows::Win32::Graphics::Imaging::IWICBitmap, x: i32, y: i32, w: u32, h: u32) -> Result<()> {
+    use windows::Win32::Graphics::Imaging::*;
+    let lock = bmp.Lock(&WICRect { X: 0, Y: 0, Width: w as i32, Height: h as i32 }, WICBitmapLockRead.0 as u32)?;
+    let stride = lock.GetStride()?;
+    let mut size = 0u32;
+    let mut ptr: *mut u8 = std::ptr::null_mut();
+    lock.GetDataPointer(&mut size, &mut ptr)?;
+    let bmi = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: (stride / 4) as i32,
+            biHeight: -(h as i32),
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let r = StretchDIBits(hdc, x, y, w as i32, h as i32, 0, 0, w as i32, h as i32, Some(ptr as *const _), &bmi, DIB_RGB_COLORS, SRCCOPY);
+    drop(lock);
+    if r == 0 {
+        return Err(Error::new(Error::from_thread().code(), "StretchDIBits failed"));
+    }
     Ok(())
 }
